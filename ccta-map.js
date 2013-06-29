@@ -9,7 +9,7 @@
 			{				
 				var mapButton = new qx.ui.form.Button('Map');
 				var app = qx.core.Init.getApplication();
-                var optionsBar = app.getOptionsBar().getLayoutParent();
+                		var optionsBar = app.getOptionsBar().getLayoutParent();
 				var d = this.__getData();
 				
 				mapButton.addListener('execute', function()
@@ -129,16 +129,16 @@
 				this.setLayout(new qx.ui.layout.VBox());
 				
 				this.set({
-                    width: 765,
+                    			width: 765,
 					height: 550,
-                    caption: "Alliance Map",
-                    padding: 2,
+                    			caption: "Alliance Map",
+                    			padding: 2,
 					marginTop: 20,
-                    allowMaximize: false,
-                    showMaximize: false,
-                    allowMinimize: false,
-                    showMinimize: false
-                });
+                    			allowMaximize: false,
+                    			showMaximize: false,
+                    			allowMinimize: false,
+                    			showMinimize: false
+                		});
 				
 				var zoomIn = new qx.ui.form.Button('+');
 				var zoomOut = new qx.ui.form.Button('-');
