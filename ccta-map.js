@@ -10,13 +10,15 @@
 				var mapButton = new qx.ui.form.Button('Map');
 				var app = qx.core.Init.getApplication();
                 var optionsBar = app.getOptionsBar().getLayoutParent();
+				var d = this.__getData();
 				
 				mapButton.addListener('execute', function()
 				{
+					this.data = d;
 					ccta_map.container.getInstance().open();
 				}, this);
 				
-				optionsBar.add(mapButton)
+				optionsBar.add(mapButton);
 
 			}
 			catch(e)
@@ -153,10 +155,11 @@
 				info.set({
 					minWidth: 200,
 					minHeight: 450,
-					marginLeft: 10,
 					marginTop: 10,
 					backgroundColor: 'white'
 				});
+				
+				rightBar.setPadding(10);
 				
 				this.addListener('appear', function()
 				{
@@ -176,14 +179,16 @@
 						
 						canvasContainer.add(canvas);
 						this.add(grid);
+						this.canvasContainer = canvasContainer;
 						this.info = info;
-						if(document.getElementById('canvasContainer'))
+						
+						var showCanvas = function()
 						{
 							document.getElementById('canvasContainer').appendChild(canvas.div);
-						}
-						else{
-							setTimeout(function(){ document.getElementById('canvasContainer').appendChild(canvas.div) }, 1000);
-						}
+							canvas.__drawCanvas();
+						};
+						
+						(document.getElementById('canvasContainer')) ? showCanvas() : setTimeout(showCanvas, 1000);
 					}
 					catch(e)
 					{
@@ -201,9 +206,30 @@
 		destruct: function(){},
 		members:
 		{
+			info: null,
+			
 			__getCanvasContainer: function(){ return this.canvasContainter },
 			
-			__getInfo: function(){ return this.info }
+			__getInfo: function(){ return this.info },
+			
+			__setInfo: function(base)			// Gives Error: TypeError: Cannot call method 'removeAll' of undefined //
+			{
+				try
+				{
+					var info = this.info;
+					info.removeAll();
+					if(!base) return;
+					for ( var i = 0; i < base.length; i++)
+					{
+						var label = new qx.ui.basic.Label(base[i]);
+						info.add(label);
+					}
+				}
+				catch(e)
+				{
+					console.log(e.toString());
+				}
+			}
 			
 		}
 	});
@@ -227,10 +253,8 @@
 					mask = document.createElement('div'),
 					canvas = document.createElement('canvas'),
 					ctx = canvas.getContext("2d"),
-					data = ccta_map.getInstance().__getData(),
-					root = this,
-					onHover = this.__onMapHover;
-				
+					root = this;
+								
 				div.style.width = '500px';
 				div.style.height = '500px';
 				div.style.position = 'absolute';
@@ -248,11 +272,11 @@
 				this.canvas = canvas;
 				this.mask = mask;
 				this.ctx = ctx;
-				this.data = data;
 				
-				this.__drawCanvas(true);
+				this.__drawCanvas();
 				this.__zoomIn = function(){ if (root.scale < 12) root.__scaleMap('up') };
 				this.__zoomOut = function(){if (root.scale > 1) root.__scaleMap('down') };
+				this.__draggable(mask);
 				
 				div.appendChild(canvas);
 				div.appendChild(mask);
@@ -350,14 +374,14 @@
 					};
 					
 					for (var player in data.players) {
-						for (var base in data.players[player].bases){
-							var b = data.players[player].bases[base];
+						for (var i = 0; i < data.players[player].bases.length; i++){
+							var b = data.players[player].bases[i];
 							(player == owner) ? createBase(b[0]/2, b[1]/2, 'owner') : createBase(b[0]/2, b[1]/2, type);
 							this.elements.push({"x":b[0],"y":b[1],"bn":b[2],"an":name,"pn":player,"l":b[3],"t":"base","ai":data.id,"pi":data.players[player].id})
 						}
 					}
-					for (var x in data.pois){
-						createPoi(data.pois[x].x/2, data.pois[x].y/2, data.pois[x].t - 2);
+					for (var i = 0; i < data.pois.length; i++){
+						createPoi(data.pois[i].x/2, data.pois[i].y/2, data.pois[i].t - 2);
 					}
 					this.inProgress = false;
 				}
@@ -369,6 +393,7 @@
 			
 			__outlineBase: function(x,y)
 			{
+				this.__drawCanvas(false);
 				var r = 0.5, ctx = this.ctx;
 				var grd=ctx.createLinearGradient(x-r, y-r, x+r, y+r);
 					grd.addColorStop(0, "#ffe50e");
@@ -390,12 +415,43 @@
 				try
 				{
 					var start, end, initCoords = [], selectedBase = false, elements = this.elements, root = this, canvas = this.canvas, c = 0;
-//					var cont = ccta_map.container.getInstance().info;
-//					console.log(cont)					
+					var win = ccta_map.container.getInstance();
+					var setInfo = win.__setInfo;					
+					
+					var displayBaseInfo = function()
+					{
+						try
+						{
+							if (!selectedBase || root.inProgress) return;
+							var base = [];
+							for ( var i in selectedBase) {
+								var txt = "";
+								switch(i)
+								{
+									case "an": txt = "Alliance: " + selectedBase[i]; break;
+									case "bn": txt = "Base    : " + selectedBase[i]; break;
+									case "pn": txt = "Player  : " +  selectedBase[i]; break;
+									case "l" : txt = "Level   : " +  selectedBase[i]; break;
+									default  : txt = false;
+								}
+								if(txt)
+								{
+									var label = new qx.ui.basic.Label(txt);
+									base.push(txt);
+								}
+								console.log(txt);
+								setInfo(base);
+							}
+						}
+						catch(e)
+						{
+							console.log(e.toString());
+						}
+					};
 					
 					var onMapHover = function(event)
 					{
-						if (this.scale < 4 || root.inProgress) return;
+						if (root.scale < 4 || root.inProgress) return;
 						var getCoords = function()
 						{
 							var canvasRect = canvas.getBoundingClientRect();
@@ -424,7 +480,7 @@
 							else
 							{
 								selectedBase = false;
-								displayBaseInfo();
+								setInfo(false);
 							}
 						}
 					};
@@ -456,27 +512,6 @@
 					{
 						if (!selectedBase || root.inProgress) return;
 						root.__outlineBase((selectedBase.x)/2, (selectedBase.y)/2);
-					};
-					
-					var displayBaseInfo = function()
-					{
-
-//						if(cont.removeAll) cont.removeAll();
-						if (!selectedBase || root.inProgress) return;
-						for ( var i in selectedBase) {
-							var txt = "";
-							switch(i)
-							{
-								case "an": txt = "Alliance: " + selectedBase[i]; break;
-								case "bn": txt = "Base    : " + selectedBase[i]; break;
-								case "pn": txt = "Player  : " +  selectedBase[i]; break;
-								case "l" : txt = "Level   : " +  selectedBase[i]; break;
-								default  : txt = false;
-							}
-//							if(txt) var label = new qx.ui.basic.Label(txt);
-//							cont.add(label);
-							console.log(txt);
-						}
 					};
 			
 					var onMapDown = function(event){
@@ -514,9 +549,11 @@
 				}
 			},
 			
-			__drawCanvas: function(p)
+			__drawCanvas: function()
 			{
-				var b = this.data, mask = this.mask, n = this.scale, canvas = this.canvas, ctx = this.ctx;
+				var c = ccta_map.getInstance();
+				var b = c.data;
+				var mask = this.mask, n = this.scale, canvas = this.canvas, ctx = this.ctx;
 				canvas.width = n * 500;
 				canvas.height = n * 500;
 				ctx.scale(n, n);
@@ -526,7 +563,6 @@
 					var name = b[i][0], data = b[i][1], type = b[i][2];
 					this.__createAlliance(name, data, type);
 				}
-				if(p) this.__draggable(mask);
 			},
 				
 			__scaleMap: function(str)
@@ -539,7 +575,7 @@
 						y = ((canvas.offsetTop - 250) * newScale/this.scale) + 250;
 					this.scale = newScale;
 					ctx.clearRect(0, 0, canvas.width, canvas.height);
-					this.__drawCanvas(false);
+					this.__drawCanvas();
 					canvas.style.left = newScale == 1 ? 0 : x + 'px';
 					canvas.style.top = newScale == 1 ? 0 : y + 'px';
 				}
