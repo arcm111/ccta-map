@@ -1,4 +1,4 @@
-  qx.Class.define("ccta_map", 
+	qx.Class.define("ccta_map", 
 	{
 		type: "singleton",
 		extend: qx.core.Object,
@@ -6,40 +6,7 @@
 		construct: function()
 		{
 			try
-			{
-				var root = this;
-				var data = ClientLib.Data.MainData.GetInstance();
-				var alliance_data = data.get_Alliance();
-				var alliance_id = alliance_data.get_Id();
-				var alliance_name = alliance_data.get_Name();
-				var alliance_players = alliance_data.get_MemberDataAsArray();
-				var alliance_pois = alliance_data.get_OwnedPOIs();
-				var alliance_relations = alliance_data.get_Relationships();
-				
-				var alliance = {};
-					alliance.id = alliance_id;
-					alliance.name = alliance_name;
-					alliance.pois = alliance_pois;
-					
-				var players = {};
-				alliance_players.map(function(player){
-					var playerId = player.Id, playerName = player.Name, bases = root.__getBases(playerId);
-					players[playerName] = {"id": playerId, "name": playerName, "bases": bases};
-				});
-				alliance.players = players;
-				
-				var selectedAlliances = [];
-				selectedAlliances[0] = [alliance_name, alliance, 'alliance'];
-				alliance_relations.map(function(x){
-					if (x.Relationship == 3)
-					{
-						var name = x.OtherAllianceName, id = x.OtherAllianceId, type = x.Relationship, players = root.__getPlayers(id), pois = root.__getPois(id);
-						var enemy = {"id": id, "name": name, "players": players, "pois": pois};
-						selectedAlliances.push([name, enemy, "enemy"]);
-					}
-				});
-				this.selectedAlliances = selectedAlliances;
-				
+			{				
 				var mapButton = new qx.ui.form.Button('Map');
 				var app = qx.core.Init.getApplication();
                 var optionsBar = app.getOptionsBar().getLayoutParent();
@@ -106,7 +73,44 @@
 						if (data.opois != null) a = data.opois;
 					}), null);
 					return a;
+			},
+			
+			__getData: function()
+			{
+				var root = this;
+				var data = ClientLib.Data.MainData.GetInstance();
+				var alliance_data = data.get_Alliance();
+				var alliance_id = alliance_data.get_Id();
+				var alliance_name = alliance_data.get_Name();
+				var alliance_players = alliance_data.get_MemberDataAsArray();
+				var alliance_pois = alliance_data.get_OwnedPOIs();
+				var alliance_relations = alliance_data.get_Relationships();
+				
+				var alliance = {};
+					alliance.id = alliance_id;
+					alliance.name = alliance_name;
+					alliance.pois = alliance_pois;
+					
+				var players = {};
+				alliance_players.map(function(player){
+					var playerId = player.Id, playerName = player.Name, bases = root.__getBases(playerId);
+					players[playerName] = {"id": playerId, "name": playerName, "bases": bases};
+				});
+				alliance.players = players;
+				
+				var selectedAlliances = [];
+				selectedAlliances[0] = [alliance_name, alliance, 'alliance'];
+				alliance_relations.map(function(x){
+					if (x.Relationship == 3)
+					{
+						var name = x.OtherAllianceName, id = x.OtherAllianceId, type = x.Relationship, players = root.__getPlayers(id), pois = root.__getPois(id);
+						var enemy = {"id": id, "name": name, "players": players, "pois": pois};
+						selectedAlliances.push([name, enemy, "enemy"]);
+					}
+				});
+				return selectedAlliances;
 			}
+			
 		}
 	});
 	
@@ -223,7 +227,7 @@
 					mask = document.createElement('div'),
 					canvas = document.createElement('canvas'),
 					ctx = canvas.getContext("2d"),
-					data = ccta_map.getInstance().selectedAlliances,
+					data = ccta_map.getInstance().__getData(),
 					root = this,
 					onHover = this.__onMapHover;
 				
@@ -246,7 +250,7 @@
 				this.ctx = ctx;
 				this.data = data;
 				
-				this.__drawCanvas();
+				this.__drawCanvas(true);
 				this.__zoomIn = function(){ if (root.scale < 12) root.__scaleMap('up') };
 				this.__zoomOut = function(){if (root.scale > 1) root.__scaleMap('down') };
 				
@@ -270,6 +274,8 @@
 			selectedBase: false,
 			
 			elements: [],
+			
+			inProgress: false,
 			
 			__createLayout: function()
 			{
@@ -300,6 +306,7 @@
 			{
 				try
 				{
+					this.inProgress = true;
 					var colors = {
 						"bases": {"alliance":["#86d3fb","#75b7d9"], "owner":["#ffc48b","#d5a677"], "enemy":["#ff8e8b","#dc7a78"], "nap":["#ffffff","#cccccc"], "selected":["#ffe50e", "#d7c109"]},
 						"pois": [["#add2a8","#6db064"], ["#75b9da","#4282bd"], ["#abd2d6","#6bafb7"], ["#e2e0b7","#ccc880"], ["#e5c998","#d09e53"], ["#d4a297","#b35a54"], ["#afa3b1","#755f79"]]
@@ -310,7 +317,6 @@
 					var createBase = function (x, y, bt) 
 					{
 						var c = colors.bases[bt][0], r = 0.5, d = colors.bases[bt][1];
-						var r = 0.5;
 						var grd=ctx.createLinearGradient(x-r, y-r, x+r, y+r);
 							grd.addColorStop(0, c);
 							grd.addColorStop(1, d);
@@ -342,7 +348,7 @@
 							ctx.stroke();
 						}
 					};
-	
+					
 					for (var player in data.players) {
 						for (var base in data.players[player].bases){
 							var b = data.players[player].bases[base];
@@ -353,10 +359,29 @@
 					for (var x in data.pois){
 						createPoi(data.pois[x].x/2, data.pois[x].y/2, data.pois[x].t - 2);
 					}
+					this.inProgress = false;
 				}
 				catch(e)
 				{
 					console.log(e.toString());
+				}
+			},
+			
+			__outlineBase: function(x,y)
+			{
+				var r = 0.5, ctx = this.ctx;
+				var grd=ctx.createLinearGradient(x-r, y-r, x+r, y+r);
+					grd.addColorStop(0, "#ffe50e");
+					grd.addColorStop(1, "#d7c109");
+				ctx.beginPath();
+				ctx.arc(x, y, 0.5, 0, Math.PI * 2, true);
+				ctx.closePath();
+				ctx.fillStyle = grd;
+				ctx.fill();
+				if(this.scale > 3){
+					ctx.lineWidth = 0.1;
+					ctx.strokeStyle = '#000000';
+					ctx.stroke();
 				}
 			},
 
@@ -365,18 +390,17 @@
 				try
 				{
 					var start, end, initCoords = [], selectedBase = false, elements = this.elements, root = this, canvas = this.canvas, c = 0;
-					var cont = ccta_map.container.getInstance().info;
-					console.log(cont)					
+//					var cont = ccta_map.container.getInstance().info;
+//					console.log(cont)					
 					
-					var onMapHover = function(e)
+					var onMapHover = function(event)
 					{
-						if (this.scale < 6) return;
-						
+						if (this.scale < 4 || root.inProgress) return;
 						var getCoords = function()
 						{
 							var canvasRect = canvas.getBoundingClientRect();
-							var x = (e.pageX - canvasRect.left),
-								y = (e.pageY - canvasRect.top);
+							var x = (event.pageX - canvasRect.left),
+								y = (event.pageY - canvasRect.top);
 							return [x, y];
 						};
 						
@@ -405,10 +429,10 @@
 						}
 					};
 					
-					var onMapDrag = function(e)
+					var onMapDrag = function(event)
 					{
-						if (root.scale == 1) return;
-						var cx = canvas.offsetLeft, cy = canvas.offsetTop, mx = e.pageX, my = e.pageY;
+						if (root.scale == 1 || root.inProgress) return;
+						var cx = canvas.offsetLeft, cy = canvas.offsetTop, mx = event.pageX, my = event.pageY;
 						var newX = cx + mx - initCoords[0], newY = cy + my - initCoords[1];
 						initCoords[0] = mx;
 						initCoords[1] = my;
@@ -416,28 +440,29 @@
 						canvas.style.left = newX + 'px';
 					};
 					
-					var onMouseWheel = function()
+					var onMapWheel = function(event)
 					{
-						var e = window.event || e, s = root.scale;
-						var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
-						if((delta < 0 && s <= 1) || (delta > 0 && s >= 12)) return;
+						if (root.inProgress) return;
+						var delta = Math.max(-1, Math.min(1, (event.wheelDelta || -event.detail)));
+						if((delta < 0 && root.scale <= 1) || (delta > 0 && root.scale >= 12)) return;
 						c += delta;
-						var str = ( Math.abs(c) % 6 == 0 ) ? (delta < 0) ? 'down' : 'up' : false;
+						var str = ( Math.abs(c) % 3 == 0 ) ? ((delta < 0) ? 'down' : 'up') : false;
 						if(str) root.__scaleMap(str);
+						console.log(c, str);
 					};
 
 					
 					var outlineBase = function()
 					{
-						if (!selectedBase) return;
-						root.__createBase(selectedBase.x/2, selectedBase.y/2, 'selected');
+						if (!selectedBase || root.inProgress) return;
+						root.__outlineBase((selectedBase.x)/2, (selectedBase.y)/2);
 					};
 					
 					var displayBaseInfo = function()
 					{
 
 //						if(cont.removeAll) cont.removeAll();
-						if (!selectedBase) return;
+						if (!selectedBase || root.inProgress) return;
 						for ( var i in selectedBase) {
 							var txt = "";
 							switch(i)
@@ -454,24 +479,34 @@
 						}
 					};
 			
-					mask.onmousedown = function(event){
-						var x = event.pageX, y = event.pageY;
+					var onMapDown = function(event){
+						var x = event.pageX, y = event.pageY, t = new Date();
 						initCoords = [x,y];
-						mask.onmousemove = function(event){ onMapDrag(event) };
-						start = (new Date()).getTime();
+						start = t.getTime();
+						mask.removeEventListener('mousemove', onMapHover, false);
+						mask.addEventListener('mousemove', onMapDrag, false);
 					};
-					mask.onmouseup = function(event){
-						end = (new Date()).getTime();
-						var x = event.pageX, y = event.pageY;
+					
+					var onMapUp = function(event){
+						var x = event.pageX, y = event.pageY, t = new Date();
+						end = t.getTime();
 						initCoords = [x,y];
-						mask.onmousemove = function(event){ onMapHover(event) };
+						mask.removeEventListener('mousemove', onMapDrag, false);
+						mask.addEventListener('mousemove', onMapHover, false); 
 						if (end - start < 250) outlineBase();
 					};
-					mask.onmouseout = function(event){
-						mask.onmousemove = function(event){ onMapHover(event) };
+					
+					var onMapOut = function(event){
+						mask.removeEventListener('mousemove', onMapDrag, false);
+						mask.addEventListener('mousemove', onMapHover, false); 
 					};
-					mask.addEventListener('mousewheel', onMouseWheel, false);
-					mask.addEventListener('DOMMouseScroll', onMouseWheel, false);
+					
+					mask.addEventListener('mouseup', onMapUp, false);
+					mask.addEventListener('mousedown', onMapDown, false);
+					mask.addEventListener('mousemove', onMapHover, false); 
+					mask.addEventListener('mouseout', onMapOut, false);
+					mask.addEventListener('mousewheel', onMapWheel, false);
+					mask.addEventListener('DOMMouseScroll', onMapWheel, false);
 				}
 				catch(e)
 				{
@@ -479,7 +514,7 @@
 				}
 			},
 			
-			__drawCanvas: function()
+			__drawCanvas: function(p)
 			{
 				var b = this.data, mask = this.mask, n = this.scale, canvas = this.canvas, ctx = this.ctx;
 				canvas.width = n * 500;
@@ -491,7 +526,7 @@
 					var name = b[i][0], data = b[i][1], type = b[i][2];
 					this.__createAlliance(name, data, type);
 				}
-				this.__draggable(mask);
+				if(p) this.__draggable(mask);
 			},
 				
 			__scaleMap: function(str)
@@ -504,7 +539,7 @@
 						y = ((canvas.offsetTop - 250) * newScale/this.scale) + 250;
 					this.scale = newScale;
 					ctx.clearRect(0, 0, canvas.width, canvas.height);
-					this.__drawCanvas();
+					this.__drawCanvas(false);
 					canvas.style.left = newScale == 1 ? 0 : x + 'px';
 					canvas.style.top = newScale == 1 ? 0 : y + 'px';
 				}
