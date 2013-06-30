@@ -9,7 +9,7 @@
 			{				
 				var mapButton = new qx.ui.form.Button('Map');
 				var app = qx.core.Init.getApplication();
-                		var optionsBar = app.getOptionsBar().getLayoutParent();
+				var optionsBar = app.getOptionsBar().getLayoutParent();
 				var d = this.__getData();
 				
 				mapButton.addListener('execute', function()
@@ -129,22 +129,22 @@
 				this.setLayout(new qx.ui.layout.VBox());
 				
 				this.set({
-                    			width: 765,
+					width: 765,
 					height: 550,
-                    			caption: "Alliance Map",
-                    			padding: 2,
+					caption: "Alliance Map",
+					padding: 2,
 					marginTop: 20,
-                    			allowMaximize: false,
-                    			showMaximize: false,
-                    			allowMinimize: false,
-                    			showMinimize: false
-                		});
+					allowMaximize: false,
+					showMaximize: false,
+					allowMinimize: false,
+					showMinimize: false
+				});
 				
 				var zoomIn = new qx.ui.form.Button('+');
 				var zoomOut = new qx.ui.form.Button('-');
 				var grid = new qx.ui.container.Composite(new qx.ui.layout.Grid(3,1));
 				var info = new qx.ui.container.Composite(new qx.ui.layout.VBox());
-				var canvasContainer = new qx.ui.container.Composite(new qx.ui.layout.VBox())
+				var canvasContainer = new qx.ui.container.Composite(new qx.ui.layout.VBox());
 				var rightBar = new qx.ui.container.Composite(new qx.ui.layout.VBox());
 				var leftBar = new qx.ui.container.Composite(new qx.ui.layout.VBox());
 				
@@ -160,6 +160,8 @@
 				});
 				
 				rightBar.setPadding(10);
+				
+				this.info = info;
 				
 				this.addListener('appear', function()
 				{
@@ -180,7 +182,6 @@
 						canvasContainer.add(canvas);
 						this.add(grid);
 						this.canvasContainer = canvasContainer;
-						this.info = info;
 						
 						var showCanvas = function()
 						{
@@ -299,6 +300,8 @@
 			
 			elements: [],
 			
+			locations: [],
+			
 			inProgress: false,
 			
 			__createLayout: function()
@@ -377,11 +380,15 @@
 						for (var i = 0; i < data.players[player].bases.length; i++){
 							var b = data.players[player].bases[i];
 							(player == owner) ? createBase(b[0]/2, b[1]/2, 'owner') : createBase(b[0]/2, b[1]/2, type);
-							this.elements.push({"x":b[0],"y":b[1],"bn":b[2],"an":name,"pn":player,"l":b[3],"t":"base","ai":data.id,"pi":data.players[player].id})
+							this.elements.push({"x":b[0],"y":b[1],"an":name,"pn":player,"bn":b[2],"l":b[3],"ai":data.id,"pi":data.players[player].id});
+							this.locations.push([b[0],b[1]])
 						}
 					}
 					for (var i = 0; i < data.pois.length; i++){
-						createPoi(data.pois[i].x/2, data.pois[i].y/2, data.pois[i].t - 2);
+						var x = data.pois[i].x, y = data.pois[i].y, t = data.pois[i].t, l = data.pois[i].l;
+						createPoi(x/2, y/2, t - 2);
+						this.elements.push({"x": x, "y": y, "an": name, "ai": data.id, "t": t, "l": l});
+						this.locations.push([x, y]);
 					}
 					this.inProgress = false;
 				}
@@ -414,9 +421,7 @@
 			{
 				try
 				{
-					var start, end, initCoords = [], selectedBase = false, elements = this.elements, root = this, canvas = this.canvas, c = 0;
-					var win = ccta_map.container.getInstance();
-					var setInfo = win.__setInfo;					
+					var start, end, initCoords = [], selectedBase = false, elements = this.elements, root = this, canvas = this.canvas, c = 0, loc = this.locations;					
 					
 					var displayBaseInfo = function()
 					{
@@ -424,23 +429,24 @@
 						{
 							if (!selectedBase || root.inProgress) return;
 							var base = [];
+							var pois = ['Tiberium', 'Crystal', 'Reactor', 'Tungesten', 'Uranium', 'Aircraft Guidance', 'Resonater'];
 							for ( var i in selectedBase) {
 								var txt = "";
 								switch(i)
 								{
 									case "an": txt = "Alliance: " + selectedBase[i]; break;
 									case "bn": txt = "Base    : " + selectedBase[i]; break;
-									case "pn": txt = "Player  : " +  selectedBase[i]; break;
-									case "l" : txt = "Level   : " +  selectedBase[i]; break;
+									case "pn": txt = "Player  : " + selectedBase[i]; break;
+									case "l" : txt = "Level   : " + selectedBase[i]; break;
+									case "t" : txt = "Type    : " + pois[selectedBase[i] - 2]; break;
 									default  : txt = false;
 								}
 								if(txt)
 								{
-									var label = new qx.ui.basic.Label(txt);
 									base.push(txt);
 								}
 								console.log(txt);
-								setInfo(base);
+								ccta_map.container.getInstance().__setInfo(base);
 							}
 						}
 						catch(e)
@@ -468,19 +474,20 @@
 						x = Math.round(coords[0] * 2 / root.scale);
 						y = Math.round(coords[1] * 2 / root.scale);
 
-						for(var i in elements){
-							var elmX = elements[i].x,
-								elmY = elements[i].y;
+						for(var i = 0; i < loc.length; i++){
+							var elmX = loc[i][0],
+								elmY = loc[i][1];
 							if ((x == elmX) && (y == elmY)) 
 							{
 								selectedBase = elements[i];
+								console.log(loc[i], elements[i]);
 								displayBaseInfo();
 								return;
 							}
 							else
 							{
 								selectedBase = false;
-								setInfo(false);
+								ccta_map.container.getInstance().__setInfo(false);
 							}
 						}
 					};
