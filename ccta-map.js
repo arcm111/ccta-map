@@ -7,18 +7,42 @@
 		{
 			try
 			{				
+				
+				var root = this;
+				var data = ClientLib.Data.MainData.GetInstance();
+				var alliance_data = data.get_Alliance();
+				var alliance_id = alliance_data.get_Id();
+				var alliance_relations = alliance_data.get_Relationships();
+				
+				var alliancesList = [];
+				alliancesList[0] = [alliance_id, 'alliance'];
+								
+				alliance_relations.map(function(x)
+				{
+					var type;
+					switch(x.Relationship)
+					{
+						case 1 : type = "ally";    break;
+						case 2 : type = "nap";     break;
+						case 3 : type = "enemy";   break;
+						default: type = "unknown";
+					}
+					var id = x.OtherAllianceId;
+					alliancesList.push([id, type]);
+				});
+				
+				root.getData(alliancesList);
+				
 				var mapButton = new qx.ui.form.Button('Map');
 				var app = qx.core.Init.getApplication();
 				var optionsBar = app.getOptionsBar().getLayoutParent();
-				var d = this.__getData();
 				
 				mapButton.addListener('execute', function()
 				{
-					this.data = d;
 					ccta_map.container.getInstance().open();
 				}, this);
 				
-				optionsBar.add(mapButton);
+				optionsBar.getChildren()[0].getChildren()[2].addAt(mapButton,1);
 
 			}
 			catch(e)
@@ -30,90 +54,88 @@
 		destruct: function(){},
 		members: 
 		{
-			__getBases: function(pid)
+			__data: null,
+			__totalProcesses: null,
+			
+			getData: function(arr)
 			{
-					var a = [];
-					ClientLib.Net.CommunicationManager.GetInstance().SendSimpleCommand("GetPublicPlayerInfo", { id: pid }, 
+				if(typeof arr != "object" || arr.length == 'undefined')
+				{
+					console.log('alliances list is invalid');
+					return;
+				}
+				this.__data = [];
+				this.__totalProcesses = arr.length - 1;
+				for(var i = 0; i < arr.length; i++)
+				{
+					this.__getAlliance(arr[i][0], arr[i][1], i);
+				}
+			},
+			
+			__getAlliance: function(aid, type, n)
+			{
+				try
+				{
+					var alliance = {}, root = this;
+					alliance.id = aid;
+					alliance.players = {};
+					
+					ClientLib.Net.CommunicationManager.GetInstance().SendSimpleCommand("GetPublicAllianceInfo", { id: aid }, 
 					phe.cnc.Util.createEventDelegate(ClientLib.Net.CommandResult, this, function(context, data)
 					{
-						if (data.c != null){
-							for (var i = 0; i < data.c.length; i++){
-								var id = data.c[i].i;
-								var name = data.c[i].n;
-								var x = data.c[i].x
-								var y = data.c[i].y;
-								a.push([x, y, name, id]);
-							}
+						if (data.opois != null) alliance.pois = data.opois;
+						if (data.n != null) alliance.name = data.n;
+						if (data.m != null)
+						{
+							data.m.map(function(p)
+							{
+								var playerName = p.n;
+								var playerId   = p.i;
+								var player     = {"id": playerId, "name": playerName};
+								var bases      = [];
+								var lastPlayer = data.m[data.m.length-1];
+								
+								ClientLib.Net.CommunicationManager.GetInstance().SendSimpleCommand("GetPublicPlayerInfo", { id: playerId }, 
+								phe.cnc.Util.createEventDelegate(ClientLib.Net.CommandResult, this, function(context, data)
+								{
+									if (data.c != null)
+									{
+										data.c.map(function(b)
+										{
+											var id   = b.i;
+											var name = b.n;
+											var x    = b.x
+											var y    = b.y;
+											bases.push([x, y, name, id]);
+										});
+										player.bases = bases;
+									}
+									alliance.players[playerName] = player;
+									if(n == root.__totalProcesses && p == lastPlayer) root.__onProcessComplete();
+								}), null);
+								
+							});
+							root.__data.push([alliance, type]);
 						}
 					}), null);
-					return a;
-			},
-				
-			__getPlayers: function(aid)
-			{
-					var a = {}, parent = this;
-					ClientLib.Net.CommunicationManager.GetInstance().SendSimpleCommand("GetPublicAllianceInfo", { id: parseInt(aid) }, 
-					phe.cnc.Util.createEventDelegate(ClientLib.Net.CommandResult, this, function(context, data) {
-						if (data.m != null){
-							for (var i = 0; i < data.m.length; i++) {
-								var id = data.m[i].i;
-								var name = data.m[i].n;
-								var bases = parent.__getBases(id);
-								a[name] = {"id": id, "name": name, "bases": bases};
-							}
-						}
-					}), null);
-					return a;
-			
+				}
+				catch(e)
+				{
+					console.log(e.toString());
+				}
 			},
 			
-			__getPois: function(aid)
+			__onProcessComplete: function()
 			{
-					var a = [];
-					ClientLib.Net.CommunicationManager.GetInstance().SendSimpleCommand("GetPublicAllianceInfo", { id: parseInt(aid) }, 
-					phe.cnc.Util.createEventDelegate(ClientLib.Net.CommandResult, this, function(context, data) {
-						if (data.opois != null) a = data.opois;
-					}), null);
-					return a;
-			},
-			
-			__getData: function()
-			{
-				var root = this;
-				var data = ClientLib.Data.MainData.GetInstance();
-				var alliance_data = data.get_Alliance();
-				var alliance_id = alliance_data.get_Id();
-				var alliance_name = alliance_data.get_Name();
-				var alliance_players = alliance_data.get_MemberDataAsArray();
-				var alliance_pois = alliance_data.get_OwnedPOIs();
-				var alliance_relations = alliance_data.get_Relationships();
-				
-				var alliance = {};
-					alliance.id = alliance_id;
-					alliance.name = alliance_name;
-					alliance.pois = alliance_pois;
-					
-				var players = {};
-				alliance_players.map(function(player){
-					var playerId = player.Id, playerName = player.Name, bases = root.__getBases(playerId);
-					players[playerName] = {"id": playerId, "name": playerName, "bases": bases};
-				});
-				alliance.players = players;
-				
-				var selectedAlliances = [];
-				selectedAlliances[0] = [alliance_name, alliance, 'alliance'];
-				alliance_relations.map(function(x){
-					if (x.Relationship == 3)
-					{
-						var name = x.OtherAllianceName, id = x.OtherAllianceId, type = x.Relationship, players = root.__getPlayers(id), pois = root.__getPois(id);
-						var enemy = {"id": id, "name": name, "players": players, "pois": pois};
-						selectedAlliances.push([name, enemy, "enemy"]);
-					}
-				});
-				return selectedAlliances;
+				console.log('process completed - alliances data has been generated', this.__data)
+				var win = ccta_map.container.getInstance();
+				win.receivedData = this.__data;
+				win.drawCanvas();
+				this.__totalProcess = null;
 			}
 			
 		}
+		
 	});
 	
 	qx.Class.define("ccta_map.container",
@@ -147,49 +169,88 @@
 				var canvasContainer = new qx.ui.container.Composite(new qx.ui.layout.VBox());
 				var rightBar = new qx.ui.container.Composite(new qx.ui.layout.VBox());
 				var leftBar = new qx.ui.container.Composite(new qx.ui.layout.VBox());
+				var widget = new qx.ui.core.Widget();
+				var div = new qx.html.Element('div', null, {id: 'canvasContainer'});
+				var addAlliance = new qx.ui.form.Button('Add Alliance');
 				
-				canvasContainer.setBackgroundColor('#838a8a');
-				rightBar.setBackgroundColor('#838a8a');
-				leftBar.setBackgroundColor('#838a8a');
-				
-				info.set({
-					minWidth: 200,
-					minHeight: 450,
-					marginTop: 10,
-					backgroundColor: 'white'
-				});
-				
+				grid.setBackgroundColor('#838a8a');
+				widget.set({ width: 500, height: 500 });
+				info.set({ minWidth: 160, minHeight: 300, marginTop: 10, padding: 20});
 				rightBar.setPadding(10);
 				
+				
+				rightBar.add(zoomIn);
+				rightBar.add(zoomOut);
+				rightBar.add(info);
+				rightBar.add(addAlliance);
+				canvasContainer.add(widget);
+				widget.getContentElement().add(div);
+				grid.add(leftBar, {row: 1, column: 1});
+				grid.add(rightBar, {row: 1, column: 3});
+				grid.add(canvasContainer, {row: 1, column: 2});
+				
 				this.info = info;
+				
+				//canvas
+				var cont = document.createElement('div'),
+					mask = document.createElement('div'),
+					canvas = document.createElement('canvas'),
+					ctx = canvas.getContext("2d"),
+					root = this;
+								
+				cont.style.width = '500px';
+				cont.style.height = '500px';
+				cont.style.position = 'absolute';
+				cont.style.overflow = 'hidden';
+				cont.style.backgroundColor = '#081d25';
+				
+				canvas.style.position = 'absolute';
+				
+				mask.style.position = 'absolute';
+				mask.style.width = '500px';
+				mask.style.height = '500px';
+				mask.style.background = 'url("http://archeikhmeri.co.uk/images/map_mask.png") center center no-repeat';
+				
+				this.canvas = canvas;
+				this.mask = mask;
+				this.ctx = ctx;				
+				
+				var __zoomIn = function(){ if (root.scale < 12) root.__scaleMap('up') };
+				var __zoomOut = function(){if (root.scale > 1) root.__scaleMap('down') };
+				
+				cont.appendChild(canvas);
+				cont.appendChild(mask);				
+				root.__draggable(mask);
 				
 				this.addListener('appear', function()
 				{
 					try
-					{
-						var canvas = ccta_map.canvas.getInstance();
-					
-						rightBar.add(zoomIn);
-						rightBar.add(zoomOut);
-						rightBar.add(info);
-						grid.add(leftBar, {row: 1, column: 1});
-						grid.add(rightBar, {row: 1, column: 3});
-						grid.add(canvasContainer, {row: 1, column: 2});
-						
-						zoomIn.addListener('execute', canvas.__zoomIn, this);
-						zoomOut.addListener('execute', canvas.__zoomOut, this);
-						
-						canvasContainer.add(canvas);
-						this.add(grid);
-						this.canvasContainer = canvasContainer;
-						
-						var showCanvas = function()
+					{					
+						var onLoaded = function()
 						{
-							document.getElementById('canvasContainer').appendChild(canvas.div);
-							canvas.__drawCanvas();
+							var counter = 0;
+							var check = function()
+							{
+								if(counter > 60) return;
+								var htmlDiv = document.getElementById('canvasContainer');
+								(htmlDiv) ? htmlDiv.appendChild(cont) : setTimeout(check, 1000);
+								console.log('ccta_map.container/waitForData/showCanvas: retrying check for canvasContainer is loaded');
+								counter++;
+							};
+							check();
 						};
 						
-						(document.getElementById('canvasContainer')) ? showCanvas() : setTimeout(showCanvas, 1000);
+						onLoaded();
+						
+						zoomIn.addListener('execute', __zoomIn);
+						zoomOut.addListener('execute', __zoomOut);
+						addAlliance.addListener('execute', function()
+						{
+							ccta_map.options.getInstance().open();
+						}, this);
+						
+						this.add(grid);
+						
 					}
 					catch(e)
 					{
@@ -208,15 +269,23 @@
 		members:
 		{
 			info: null,
-			
-			__getCanvasContainer: function(){ return this.canvasContainter },
-			
-			__getInfo: function(){ return this.info },
-			
-			__setInfo: function(base)			// Gives Error: TypeError: Cannot call method 'removeAll' of undefined //
+			canvas: null,
+			mask: null,
+			ctx: null,
+			receivedData: null,
+			info: null,
+			circles: [53, 85, 113, 145, 242],
+			scale: 1,
+			selectedBase: false,
+			elements: [],
+			locations: [],
+			inProgress: false,
+
+			__setInfo: function(base)
 			{
 				try
 				{
+//					console.log(base);
 					var info = this.info;
 					info.removeAll();
 					if(!base) return;
@@ -230,79 +299,7 @@
 				{
 					console.log(e.toString());
 				}
-			}
-			
-		}
-	});
-	
-	qx.Class.define("ccta_map.canvas",
-	{
-		type: "singleton",
-		extend: qx.ui.core.Widget,
-		
-		construct: function()
-		{
-			try
-			{
-				this.base(arguments);
-				this.set({
-					width: 500,
-					height: 500
-				});
-				var cont = new qx.html.Element('div', null, {id: "canvasContainer"}),
-					div = document.createElement('div'),
-					mask = document.createElement('div'),
-					canvas = document.createElement('canvas'),
-					ctx = canvas.getContext("2d"),
-					root = this;
-								
-				div.style.width = '500px';
-				div.style.height = '500px';
-				div.style.position = 'absolute';
-				div.style.overflow = 'hidden';
-				div.style.backgroundColor = '#081d25';
-				
-				canvas.style.position = 'absolute';
-				
-				mask.style.position = 'absolute';
-				mask.style.width = '500px';
-				mask.style.height = '500px';
-				mask.style.background = 'url("http://archeikhmeri.co.uk/images/map_mask.png") center center no-repeat';
-				
-				this.getContentElement().add(cont);
-				this.canvas = canvas;
-				this.mask = mask;
-				this.ctx = ctx;
-				
-				this.__drawCanvas();
-				this.__zoomIn = function(){ if (root.scale < 12) root.__scaleMap('up') };
-				this.__zoomOut = function(){if (root.scale > 1) root.__scaleMap('down') };
-				this.__draggable(mask);
-				
-				div.appendChild(canvas);
-				div.appendChild(mask);
-				this.div = div;
-			}
-			catch(e)
-			{
-				console.log(e.toString());
-			}
-			console.log('canvas creation completed');
-		},
-		destruct: function(){},
-		members:
-		{	
-			circles: [53, 85, 113, 145, 242],
-			
-			scale: 1,
-			
-			selectedBase: false,
-			
-			elements: [],
-			
-			locations: [],
-			
-			inProgress: false,
+			},
 			
 			__createLayout: function()
 			{
@@ -335,7 +332,7 @@
 				{
 					this.inProgress = true;
 					var colors = {
-						"bases": {"alliance":["#86d3fb","#75b7d9"], "owner":["#ffc48b","#d5a677"], "enemy":["#ff8e8b","#dc7a78"], "nap":["#ffffff","#cccccc"], "selected":["#ffe50e", "#d7c109"]},
+						"bases": {"alliance":["#86d3fb","#75b7d9"], "owner":["#ffc48b","#d5a677"], "enemy":["#ff8e8b","#dc7a78"], "nap":["#ffffff","#cccccc"], "selected":["#ffe50e", "#d7c109"], "ally":["#6ce272", "#5fc664"], "unknow": ['#333333', '#999999']},
 						"pois": [["#add2a8","#6db064"], ["#75b9da","#4282bd"], ["#abd2d6","#6bafb7"], ["#e2e0b7","#ccc880"], ["#e5c998","#d09e53"], ["#d4a297","#b35a54"], ["#afa3b1","#755f79"]]
 					};
 					
@@ -357,16 +354,17 @@
 							ctx.strokeStyle = '#000000';
 							ctx.stroke();
 						}
+						ctx.closePath();
 					};
 					
 					var createPoi = function(x, y, t) 
 					{
-						var c = colors.pois[t][0], d = colors.pois[t][1];
-						var grd = ctx.createLinearGradient(x, y, x+1, y+1);
+						var c = colors.pois[t][0], r = 0.5, d = colors.pois[t][1];
+						var grd = ctx.createLinearGradient(x-r, y-r, x+r, y+r);
 							grd.addColorStop(0, c);
 							grd.addColorStop(1, d);
 						ctx.beginPath();
-						ctx.rect(x, y, 1, 1);
+						ctx.rect(x-r, y-r, 1, 1);
 						ctx.fillStyle = grd;
 						ctx.fill();
 						if(this.scale > 3){
@@ -374,13 +372,14 @@
 							ctx.lineWidth = 0.1;
 							ctx.stroke();
 						}
+						ctx.closePath();
 					};
 					
 					for (var player in data.players) {
 						for (var i = 0; i < data.players[player].bases.length; i++){
-							var b = data.players[player].bases[i];
+							var b = data.players[player].bases[i], pid = data.players[player].id;
 							(player == owner) ? createBase(b[0]/2, b[1]/2, 'owner') : createBase(b[0]/2, b[1]/2, type);
-							this.elements.push({"x":b[0],"y":b[1],"an":name,"pn":player,"bn":b[2],"l":b[3],"ai":data.id,"pi":data.players[player].id});
+							this.elements.push({"x":b[0],"y":b[1],"an":name,"pn":player,"bn":b[2],"l":b[3],"ai":data.id,"pi":pid,"type":"base"});
 							this.locations.push([b[0],b[1]])
 						}
 					}
@@ -400,7 +399,7 @@
 			
 			__outlineBase: function(x,y)
 			{
-				this.__drawCanvas(false);
+				this.drawCanvas();
 				var r = 0.5, ctx = this.ctx;
 				var grd=ctx.createLinearGradient(x-r, y-r, x+r, y+r);
 					grd.addColorStop(0, "#ffe50e");
@@ -415,13 +414,14 @@
 					ctx.strokeStyle = '#000000';
 					ctx.stroke();
 				}
+				ctx.closePath();
 			},
 
 			__draggable: function(mask)
 			{
 				try
 				{
-					var start, end, initCoords = [], selectedBase = false, elements = this.elements, root = this, canvas = this.canvas, c = 0, loc = this.locations;					
+					var start, end, initCoords = [], selectedBase = false, root = this, canvas = this.canvas, c = 0;					
 					
 					var displayBaseInfo = function()
 					{
@@ -430,7 +430,8 @@
 							if (!selectedBase || root.inProgress) return;
 							var base = [];
 							var pois = ['Tiberium', 'Crystal', 'Reactor', 'Tungesten', 'Uranium', 'Aircraft Guidance', 'Resonater'];
-							for ( var i in selectedBase) {
+							for ( var i in selectedBase)
+							{
 								var txt = "";
 								switch(i)
 								{
@@ -445,8 +446,7 @@
 								{
 									base.push(txt);
 								}
-								console.log(txt);
-								ccta_map.container.getInstance().__setInfo(base);
+								root.__setInfo(base);
 							}
 						}
 						catch(e)
@@ -458,11 +458,11 @@
 					var onMapHover = function(event)
 					{
 						if (root.scale < 4 || root.inProgress) return;
+						var loc = root.locations, elements = root.elements;
 						var getCoords = function()
 						{
 							var canvasRect = canvas.getBoundingClientRect();
-							var x = (event.pageX - canvasRect.left),
-								y = (event.pageY - canvasRect.top);
+							var x = (event.pageX - canvasRect.left), y = (event.pageY - canvasRect.top);
 							return [x, y];
 						};
 						
@@ -474,20 +474,19 @@
 						x = Math.round(coords[0] * 2 / root.scale);
 						y = Math.round(coords[1] * 2 / root.scale);
 
-						for(var i = 0; i < loc.length; i++){
-							var elmX = loc[i][0],
-								elmY = loc[i][1];
+						for(var i = 0; i < loc.length; i++)
+						{
+							var elmX = loc[i][0], elmY = loc[i][1];
 							if ((x == elmX) && (y == elmY)) 
 							{
 								selectedBase = elements[i];
-								console.log(loc[i], elements[i]);
 								displayBaseInfo();
-								return;
+								break;
 							}
 							else
 							{
 								selectedBase = false;
-								ccta_map.container.getInstance().__setInfo(false);
+								root.__setInfo(false);
 							}
 						}
 					};
@@ -517,7 +516,7 @@
 					
 					var outlineBase = function()
 					{
-						if (!selectedBase || root.inProgress) return;
+						if (!selectedBase || root.inProgress || selectedBase['type'] !== "base") return;
 						root.__outlineBase((selectedBase.x)/2, (selectedBase.y)/2);
 					};
 			
@@ -556,10 +555,11 @@
 				}
 			},
 			
-			__drawCanvas: function()
+			drawCanvas: function()
 			{
-				var c = ccta_map.getInstance();
-				var b = c.data;
+				this.elements = [];
+				this.locations = [];
+				var b = this.receivedData;
 				var mask = this.mask, n = this.scale, canvas = this.canvas, ctx = this.ctx;
 				canvas.width = n * 500;
 				canvas.height = n * 500;
@@ -567,7 +567,7 @@
 				this.__createLayout();
 				for(var i = 0; i < b.length; i++)
 				{
-					var name = b[i][0], data = b[i][1], type = b[i][2];
+					var name = b[i][0].name, data = b[i][0], type = b[i][1];
 					this.__createAlliance(name, data, type);
 				}
 			},
@@ -582,7 +582,7 @@
 						y = ((canvas.offsetTop - 250) * newScale/this.scale) + 250;
 					this.scale = newScale;
 					ctx.clearRect(0, 0, canvas.width, canvas.height);
-					this.__drawCanvas();
+					this.drawCanvas();
 					canvas.style.left = newScale == 1 ? 0 : x + 'px';
 					canvas.style.top = newScale == 1 ? 0 : y + 'px';
 				}
@@ -594,3 +594,179 @@
 			
 		}
 	});
+	
+qx.Class.define('ccta_map.options',
+{
+	type: 'singleton',
+	extend: webfrontend.gui.CustomWindow,
+	
+	construct: function()
+	{
+		try
+		{
+			this.base(arguments);
+			this.setLayout(new qx.ui.layout.VBox(10));
+			this.set({
+				width: 200,
+				height: 500,
+				showMinimize: false,
+				showMaximize: false,
+			});
+			
+			this.__getAlliances();
+							
+			var searchBox = new qx.ui.form.TextField();
+				searchBox.setPlaceholder('Search...');
+				
+			var list = new qx.ui.form.List();
+				list.setHeight(300);
+				
+			var radioButtons = [['Enemy', 'enemy'],['Ally', 'ally'],['NAP', 'nap']];
+			var radioGroup = new qx.ui.form.RadioButtonGroup();
+				radioGroup.setLayout(new qx.ui.layout.HBox(10));
+				radioGroup.setTextColor('#aaaaaa');
+				for (var i = 0; i < radioButtons.length; i++)
+				{
+					var radioButton = new qx.ui.form.RadioButton(radioButtons[i][0]);
+						radioButton.setModel(radioButtons[i][1]);
+					radioGroup.add(radioButton);
+				}
+			
+			var __createIcon = function(color)
+			{
+				var canvas = document.createElement("canvas");
+				canvas.width = 60;
+				canvas.height = 15;
+			
+				var ctx = canvas.getContext("2d");
+				ctx.beginPath();
+				ctx.rect(0,0,60,15);
+				ctx.fillStyle = color;
+				ctx.fill();
+				ctx.closePath();
+			
+				var data = canvas.toDataURL("image/png");
+				return data;
+			}
+			
+			var colors = ["#add2a8", "#75b9da", "#abd2d6", "#e2e0b7", "#e5c998", "#d4a297", "#afa3b1"];
+				
+			var colorSelectBox = new qx.ui.form.SelectBox();
+				colorSelectBox.setHeight(28);
+				for (var i = 0; i < colors.length; i++)
+				{
+					try
+					{
+					var src = __createIcon(colors[i]);
+					var listItem = new qx.ui.form.ListItem(null, src);
+						listItem.setModel(i);
+					
+					colorSelectBox.add(listItem);
+					}
+					catch(e)
+					{
+						console.log(e.toString());
+					}
+				}
+				
+			
+			var addButton = new qx.ui.form.Button('Add');
+				addButton.setEnabled(false);
+				
+			this.searchBox      = searchBox;
+			this.list           = list;
+			this.radioGroup     = radioGroup;
+			this.colorSelectBox = colorSelectBox;
+			this.addButton      = addButton;
+			
+			this.add(searchBox);
+			this.add(list);
+			this.add(radioGroup);
+			this.add(colorSelectBox);
+			this.add(addButton);
+			
+			searchBox.addListener('keyup', this.__searchAlliances, this);
+			list.addListener('changeSelection', this.__onSelectionChange, this);
+			addButton.addListener('execute', this.__addAlliance, this);
+
+		}
+		catch(e)
+		{
+			console.log(e.toString());
+		}
+		
+	},
+	destruct: function()
+	{
+		
+	},
+	members:
+	{
+		__data: null,
+		searchBox: null,
+		list: null,
+		radioGroup: null,
+		colorSelectBox: null,
+		addButton: null,
+		
+		__getAlliances: function()
+		{
+			var root = this;
+			ClientLib.Net.CommunicationManager.GetInstance().SendSimpleCommand("RankingGetData", 
+			{firstIndex: 0, lastIndex: 3000, ascending: true, view: 1, rankingType: 0, sortColumn: 2}, 
+			phe.cnc.Util.createEventDelegate(ClientLib.Net.CommandResult, this, function(context, data)
+			{
+				if(data.a != null)
+				{
+					var arr = [];
+					for( var i = 0; i < data.a.length; i++)
+					{
+						arr[i] = [data.a[i].an, data.a[i].a];
+					}
+					root.__data = arr;
+				}
+				
+			}), null);
+		},
+		
+		__searchAlliances: function()
+		{
+			var str = this.searchBox.getValue(), data = this.__data, list = this.list;
+			if (!data)
+			{
+				console.log('no data available');
+				return;
+			}
+			list.removeAll();
+			if (str == '') return;
+			data.map(function(x)
+			{
+				var patt = new RegExp("^" + str + ".+$", "i");
+				var test = patt.test(x[0]);
+				
+				if(test)
+				{
+					var listItem = new qx.ui.form.ListItem(x[0]);
+					listItem.setModel(x[1]);
+					list.add(listItem);
+				}
+				
+			});
+		},
+		
+		__onSelectionChange: function()
+		{
+			(!this.list.isSelectionEmpty()) ? this.addButton.setEnabled(true) : this.addButton.setEnabled(false);
+		},
+		
+		__addAlliance: function()
+		{
+			var aid = this.list.getSelection()[0].getModel(), 
+				type = this.radioGroup.getSelection()[0].getModel(), 
+				color = this.colorSelectBox.getSelection()[0].getModel();
+				
+			console.log(aid, type, color);
+		}
+		
+	}
+});
