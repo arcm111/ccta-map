@@ -44,7 +44,12 @@
 					}
 					this.__defaultAlliances = selectedAlliancesList;
 				}
-								
+				
+				if (typeof(Storage) !== 'undefined' && typeof(localStorage.ccta_map_settings) !== 'undefined')
+				{
+					this.__selectedAlliances = JSON.parse(localStorage.ccta_map_settings);
+				}
+						
 				var mapButton = new qx.ui.form.Button('Map');
 				var app = qx.core.Init.getApplication();
 				var optionsBar = app.getOptionsBar().getLayoutParent();
@@ -52,7 +57,7 @@
 				mapButton.addListener('execute', function()
 				{
 					root.getData();
-					ccta_map.container.getInstance().open();
+					ccta_map.container.getInstance().open(1);
 				}, this);
 				
 				optionsBar.getChildren()[0].getChildren()[2].addAt(mapButton,1);
@@ -168,33 +173,22 @@
 	qx.Class.define("ccta_map.container",
 	{
 		type: "singleton",
-		extend: webfrontend.gui.CustomWindow,
+		extend: qx.ui.container.Composite,
 		
 		construct: function()
 		{
 			try
 			{
 				this.base(arguments);
-				this.setLayout(new qx.ui.layout.VBox());
-				
-				this.set({
-					width: 765,
-					height: 550,
-					caption: "Alliance Map",
-					padding: 2,
-					marginTop: 20,
-					allowMaximize: false,
-					showMaximize: false,
-					allowMinimize: false,
-					showMinimize: false
-				});
+				var layout = new qx.ui.layout.Canvas();
+				this._setLayout(layout);
 				
 				var zoomIn = new qx.ui.form.Button('+');
-					zoomIn.setWidth(40);
+					zoomIn.setWidth(30);
 				var zoomOut = new qx.ui.form.Button('-');
-					zoomOut.setWidth(40);
+					zoomOut.setWidth(30);
 				var zoomReset = new qx.ui.form.Button('R');
-					zoomReset.setWidth(40);
+					zoomReset.setWidth(30);
 				var grid = new qx.ui.container.Composite(new qx.ui.layout.Grid(3,1));
 				var info = new qx.ui.container.Composite(new qx.ui.layout.VBox());
 				var canvasContainer = new qx.ui.container.Composite(new qx.ui.layout.VBox());
@@ -206,32 +200,31 @@
 				
 				var displayMode = new qx.ui.form.SelectBox();
 					displayMode.setHeight(28)
-				var li1 = new qx.ui.form.ListItem('All');
-					li1.setModel("all");
-				var li2 = new qx.ui.form.ListItem('My Bases');
-					li2.setModel("bases");
-				var li3 = new qx.ui.form.ListItem('My Alliance');
-					li3.setModel("alliance");
-				displayMode.add(li3);
-				displayMode.add(li2);
+				var li1 = new qx.ui.form.ListItem('All', null, "all");
+				var li2 = new qx.ui.form.ListItem('My Bases', null, "bases");
+				var li3 = new qx.ui.form.ListItem('My Alliance', null, "alliance");
 				displayMode.add(li1);
-//				displayMode.setSelection(li3);
+				displayMode.add(li2);
+				displayMode.add(li3);
+//				displayMode.setSelection([li3]);
 				
-				var zoomBar = new qx.ui.container.Composite(new qx.ui.layout.HBox(10));
+				var zoomBar = new qx.ui.container.Composite(new qx.ui.layout.HBox(15));
 				
 				var displayOptions = new qx.ui.form.RadioButtonGroup();
-					displayOptions.setLayout(new qx.ui.layout.HBox(10));
+					displayOptions.setLayout(new qx.ui.layout.HBox());
+					displayOptions.setFont('font_size_11');
 				var bothOpt = new qx.ui.form.RadioButton('Both');
 					bothOpt.setModel("both");
-				var basesOpt = new qx.ui.form.RadioButton('Bases');
+				var basesOpt = new qx.ui.form.RadioButton('Base');
 					basesOpt.setModel("bases");
-				var poisOpt = new qx.ui.form.RadioButton('POIs');
+				var poisOpt = new qx.ui.form.RadioButton('Poi');
 					poisOpt.setModel("pois");
 				displayOptions.add(bothOpt);
 				displayOptions.add(basesOpt);
 				displayOptions.add(poisOpt);
 				
 				var allianceList = new qx.ui.form.List();
+					allianceList.setFont('font_size_11');
 				
 				var editAlliance = new qx.ui.form.Button('Edit Alliances');
 				
@@ -241,14 +234,13 @@
 					slider.set({minimum: 30, maximum: 100, value: 100});
 				
 				var coordsField = new qx.ui.form.TextField();
-					coordsField.set({margin: 20, textAlign: 'center', readOnly: 'true'});
+					coordsField.set({maxWidth: 100, textAlign: 'center', readOnly: 'true', alignX: 'center'});
 				
-				grid.setBackgroundColor('#838a8a');
+				grid.set({ minWidth: 780, backgroundColor: '#838a8a', minHeight: 524, margin: 3, paddingTop: 10 });
 				widget.set({ width: 500, height: 500 });
-				info.set({ minWidth: 160, minHeight: 300, padding: 10});
-				rightBar.setPadding(10)
-				leftBar.setPadding(10);
-				
+				info.set({ minHeight: 300, padding: 10 });
+				rightBar.set({ maxWidth: 130, minWidth: 130, paddingTop: 30, paddingRight: 10 });
+				leftBar.set({ maxWidth: 130, minWidth: 130, paddingTop: 30, paddingLeft: 10 });
 				
 				zoomBar.add(zoomIn);
 				zoomBar.add(zoomOut);
@@ -371,6 +363,22 @@
 				zoomReset.addListener('execute', __zoomReset, this);
 				
 				this.add(grid);
+		
+				this.wdgAnchor = new qx.ui.basic.Image("webfrontend/ui/common/frame_basewin/frame_basewindow_tl1.png").set({ width: 3, height: 32 });
+				this.__imgTopRightCorner = new qx.ui.basic.Image("webfrontend/ui/common/frame_basewin/frame_basewindow_tr.png").set({ width: 34, height: 35 });				
+				this._add(this.__imgTopRightCorner, { right: 0, top: 0, bottom: 28 });
+				this._add(new qx.ui.basic.Image("webfrontend/ui/common/frame_basewin/frame_basewindow_r.png").set({ width: 3, height: 1, allowGrowY: true, scale: true }), { right: 0, top: 35, bottom: 29 });
+				this._add(new qx.ui.basic.Image("webfrontend/ui/common/frame_basewin/frame_basewindow_br.png").set({ width: 5, height: 28, allowGrowY: true, scale: true }), { right: 0, bottom: 0 });
+				this._add(new qx.ui.basic.Image("webfrontend/ui/common/frame_basewin/frame_basewindow_b.png").set({ width: 1, height: 3, allowGrowX: true, scale: true }), { right: 5, bottom: 0, left: 5 });
+				this._add(new qx.ui.basic.Image("webfrontend/ui/common/frame_basewin/frame_basewindow_bl.png").set({ width: 5, height: 29 }), { left: 0, bottom: 0 });
+				this._add(new qx.ui.basic.Image("webfrontend/ui/common/frame_basewin/frame_basewindow_l.png").set({ width: 3, height: 1, allowGrowY: true, scale: true }), { left: 0, bottom: 29, top: 32 });
+				this._add(this.wdgAnchor, { left: 0, top: 0 });
+				this._add(new qx.ui.basic.Image("webfrontend/ui/common/frame_basewin/frame_basewindow_tl2.png").set({ width: 25, height: 5 }), { left: 3, top: 0 });
+				this._add(new qx.ui.basic.Image("webfrontend/ui/common/frame_basewin/frame_basewindow_t.png").set({ width: 1, height: 3, allowGrowX: true, scale: true }), { left: 28, right: 34, top: 0 });
+		
+				this.__btnClose = new webfrontend.ui.SoundButton(null, "FactionUI/icons/icon_close_button.png").set({ appearance: "button-close", width: 23, height: 23, toolTipText: this.tr("tnf:close base view") });
+				this.__btnClose.addListener("execute", this._onClose, this);
+				this._add(this.__btnClose, { top: 6, right: 5 });
 				
 				var onLoaded = function()
 				{
@@ -416,7 +424,7 @@
 			__pointerY: null,
 			__selectedA: null,
 			__selectedB: null,
-			__displayM: "alliance",
+			__displayM: "all",
 			__displayO: "both",
 
 			__setInfo: function(base)
@@ -429,8 +437,12 @@
 					if(!base) return;
 					for ( var i = 0; i < base.length; i++)
 					{
-						var label = new qx.ui.basic.Label(base[i]);
-						info.add(label);
+						var title = new qx.ui.basic.Label(base[i][0]);
+							title.set({font: 'font_size_13_bold', textColor: '#375773'});
+						var value = new qx.ui.basic.Label(base[i][1]);
+							value.set({font: 'font_size_11', textColor: '#d1dee4', marginBottom: 5});
+						info.add(title);
+						info.add(value);
 					}
 				}
 				catch(e)
@@ -523,14 +535,14 @@
 								{
 									if (player == owner)
 									{
-										this.elements.push({"x":b[0],"y":b[1],"an":name,"pn":player,"bn":b[2],"l":b[3],"ai":data.id,"pi":pid,"type":"base"});
+										this.elements.push({"x":b[0],"y":b[1],"an":name,"pn":player,"bn":b[2],"bi":b[3],"ai":data.id,"pi":pid,"type":"base"});
 										this.locations.push([b[0],b[1]]);
 										createBase(b[0]/2, b[1]/2, 'owner');
 									}
 								}
 								else
 								{
-									this.elements.push({"x":b[0],"y":b[1],"an":name,"pn":player,"bn":b[2],"l":b[3],"ai":data.id,"pi":pid,"type":"base"});
+									this.elements.push({"x":b[0],"y":b[1],"an":name,"pn":player,"bn":b[2],"bi":b[3],"ai":data.id,"pi":pid,"type":"base"});
 									this.locations.push([b[0],b[1]]);
 									(player == owner) ? createBase(b[0]/2, b[1]/2, 'owner') : createBase(b[0]/2, b[1]/2, type);
 								}
@@ -590,19 +602,19 @@
 							var pois = ['Tiberium', 'Crystal', 'Reactor', 'Tungesten', 'Uranium', 'Aircraft Guidance', 'Resonater'];
 							for ( var i in selectedBase)
 							{
-								var txt = "";
+								var txt = "", val = "";
 								switch(i)
 								{
-									case "an": txt = "Alliance: " + selectedBase[i]; break;
-									case "bn": txt = "Base    : " + selectedBase[i]; break;
-									case "pn": txt = "Player  : " + selectedBase[i]; break;
-									case "l" : txt = "Level   : " + selectedBase[i]; break;
-									case "t" : txt = "Type    : " + pois[selectedBase[i] - 2]; break;
+									case "an": txt = "Alliance: "; val = selectedBase[i]; break;
+									case "bn": txt = "Base    : "; val = selectedBase[i]; break;
+									case "pn": txt = "Player  : "; val = selectedBase[i]; break;
+									case "l" : txt = "Level   : "; val = selectedBase[i]; break;
+									case "t" : txt = "Type    : "; val = pois[selectedBase[i] - 2]; break;
 									default  : txt = false;
 								}
 								if(txt)
 								{
-									base.push(txt);
+									base.push([txt, val]);
 								}
 								root.__setInfo(base);
 							}
@@ -769,8 +781,10 @@
 					var name = this.receivedData[i][0].name, type = this.receivedData[i][1], aid = this.receivedData[i][0].id;
 					if(dm == "all")
 					{
-						var li = new qx.ui.form.ListItem(name + " - " + type, null, aid);
-						this.allianceList.add(li)
+						var li = new qx.ui.form.ListItem(name, null, aid);
+						var tooltip = new qx.ui.tooltip.ToolTip(name + " - " + type)
+						li.setToolTip(tooltip)
+						this.allianceList.add(li);
 					}
 					else
 					{
@@ -843,6 +857,26 @@
 				canvas.width = 500; canvas.height = 500; canvas.style.left = 0; canvas.style.top = 0;
 				ctx.clearRect(0, 0, canvas.width, canvas.height);
 				this.__startRadarScan();
+			},
+			
+			open: function(faction)
+			{
+				
+				var app = qx.core.Init.getApplication();
+				var mainOverlay = app.getMainOverlay();
+			   
+				this.setWidth(mainOverlay.getWidth());
+				this.setMaxWidth(mainOverlay.getMaxWidth());
+				this.setHeight(mainOverlay.getHeight());
+				this.setMaxHeight(mainOverlay.getMaxHeight());
+				
+				app.getDesktop().add(this, { left: mainOverlay.getBounds().left, top: mainOverlay.getBounds().top });
+			},
+			
+			_onClose: function ()
+			{
+				var app = qx.core.Init.getApplication();
+				app.getDesktop().remove(this);
 			}
 			
 		}
@@ -881,19 +915,6 @@ qx.Class.define('ccta_map.options',
 				editList.setHeight(160);
 				editList.setSelectionMode('additive');
 				
-			var map = ccta_map.getInstance();
-			var selectedItems = [];
-			var alliancesList = (map.__selectedAlliances == null) ? map.__defaultAlliances : map.__selectedAlliances;
-			
-			alliancesList.map(function(a)
-			{
-				var aid = a[0], an  = a[2], at  = a[1];
-				var li = new qx.ui.form.ListItem(an + " - " + at, null, {'aid': aid, 'type': at, 'name': an});
-				editList.add(li);
-				selectedItems.push(aid);
-			});
-			this.__items = selectedItems;
-				
 			var radioButtons = [['Enemy', 'enemy'],['Ally', 'ally'],['NAP', 'nap']];
 			var radioGroup = new qx.ui.form.RadioButtonGroup();
 				radioGroup.setLayout(new qx.ui.layout.HBox(10));
@@ -921,9 +942,7 @@ qx.Class.define('ccta_map.options',
 				var data = canvas.toDataURL("image/png");
 				return data;
 			}
-			
 			var colors = ["#add2a8", "#75b9da", "#abd2d6", "#e2e0b7", "#e5c998", "#d4a297", "#afa3b1"];
-				
 			var colorSelectBox = new qx.ui.form.SelectBox();
 				colorSelectBox.setHeight(28);
 				for (var i = 0; i < colors.length; i++)
@@ -940,15 +959,31 @@ qx.Class.define('ccta_map.options',
 					}
 				}
 				
-			
 			var addButton = new qx.ui.form.Button('Add');
-				addButton.setEnabled(false);
-				
 			var removeButton = new qx.ui.form.Button('Remove');
-				removeButton.setEnabled(false);
-			
 			var applyButton = new qx.ui.form.Button('Apply');
 			var defaultsButton = new qx.ui.form.Button('Defaults');
+			var saveButton = new qx.ui.form.Button('Save');
+			
+			addButton.setEnabled(false);
+			removeButton.setEnabled(false);
+			applyButton.setEnabled(false);
+			defaultsButton.setEnabled(false);
+			saveButton.setEnabled(false);;
+			
+			addButton.setWidth(85);
+			removeButton.setWidth(85);
+			saveButton.setWidth(85);
+			defaultsButton.setWidth(85);
+			
+			var hbox1 = new qx.ui.container.Composite(new qx.ui.layout.HBox(10))
+			var hbox2 = new qx.ui.container.Composite(new qx.ui.layout.HBox(10))
+			
+			hbox1.add(addButton);
+			hbox1.add(removeButton);
+			
+			hbox2.add(saveButton);
+			hbox2.add(defaultsButton);
 				
 			this.searchBox      = searchBox;
 			this.list           = list;
@@ -957,16 +992,32 @@ qx.Class.define('ccta_map.options',
 			this.colorSelectBox = colorSelectBox;
 			this.addButton      = addButton;
 			this.removeButton   = removeButton;
+			this.saveButton     = saveButton;
+			this.defaultsButton = defaultsButton;
+			this.applyButton    = applyButton;
 			
 			this.add(searchBox);
 			this.add(list);
 			this.add(editList);
 			this.add(radioGroup);
 			this.add(colorSelectBox);
-			this.add(addButton);
-			this.add(removeButton);
-			this.add(defaultsButton);
+			this.add(hbox1);
+			this.add(hbox2);
 			this.add(applyButton);
+			
+			this.addListener('appear', function()
+			{
+				searchBox.setValue('');
+				list.removeAll();
+				addButton.setEnabled(false);
+				removeButton.setEnabled(false);
+				applyButton.setEnabled(false);
+				radioGroup.setSelection([ radioGroup.getSelectables()[0] ]);
+				colorSelectBox.setSelection([ colorSelectBox.getSelectables()[0] ]);
+				this.__updateList();
+				this.__checkDefaults();
+				this.__checkSavedSettings();
+			}, this);
 			
 			searchBox.addListener('keyup', this.__searchAlliances, this);
 			
@@ -975,7 +1026,7 @@ qx.Class.define('ccta_map.options',
 				if (!e.getData()[0]) return;
 				var items = this.__items, aid = e.getData()[0].getModel();
 				((items != null) && (items.indexOf(aid) > -1)) ? addButton.setEnabled(false) : addButton.setEnabled(true);
-				console.log(aid, items, items.indexOf(aid));
+//				console.log(aid, items, items.indexOf(aid));
 			}, this);
 			
 			editList.addListener('changeSelection', function(e)
@@ -994,7 +1045,7 @@ qx.Class.define('ccta_map.options',
 				editList.add(li);
 				list.resetSelection();
 				addButton.setEnabled(false);
-				console.log(aid, name, type, color);
+//				console.log(aid, name, type, color);
 				root.__updateItems();
 			}, this);
 			
@@ -1009,6 +1060,8 @@ qx.Class.define('ccta_map.options',
 			}, this);
 			
 			applyButton.addListener('execute', this.__applyChanges, this);
+			defaultsButton.addListener('execute', this.__setDefaults, this);
+			saveButton.addListener('execute', this.__saveSettings, this);
 
 		}
 		catch(e)
@@ -1031,6 +1084,9 @@ qx.Class.define('ccta_map.options',
 		colorSelectBox: null,
 		addButton: null,
 		removeButton: null,
+		saveButton: null,
+		applyButton: null,
+		defaultsButton: null,
 		__items: null,
 		
 		__getAlliances: function()
@@ -1051,6 +1107,42 @@ qx.Class.define('ccta_map.options',
 				}
 				
 			}), null);
+		},
+		
+		__updateList: function()
+		{
+			var map = ccta_map.getInstance();
+			var selectedItems = [], list = this.editList;
+			var alliancesList = (map.__selectedAlliances == null) ? map.__defaultAlliances : map.__selectedAlliances;
+			list.removeAll();
+			
+			alliancesList.map(function(a)
+			{
+				var aid = a[0], an  = a[2], at  = a[1];
+				var li = new qx.ui.form.ListItem(an + " - " + at, null, {'aid': aid, 'type': at, 'name': an});
+				list.add(li);
+				selectedItems.push(aid);
+			});
+			this.__items = selectedItems;
+		},
+		
+		__setDefaults: function()
+		{
+			var map = ccta_map.getInstance();
+			var selectedItems = [], list = this.editList;
+			var alliancesList = map.__defaultAlliances;
+			list.removeAll();
+			
+			alliancesList.map(function(a)
+			{
+				var aid = a[0], an  = a[2], at  = a[1];
+				var li = new qx.ui.form.ListItem(an + " - " + at, null, {'aid': aid, 'type': at, 'name': an});
+				list.add(li);
+				selectedItems.push(aid);
+			});
+			this.__items = selectedItems;
+			this.__currentListModified();
+			this.defaultsButton.setEnabled(false);
 		},
 		
 		__searchAlliances: function()
@@ -1080,6 +1172,8 @@ qx.Class.define('ccta_map.options',
 				items.push(listItems[i].getModel().aid);
 			}
 			this.__items = items;
+			this.__checkSavedSettings();
+			this.__currentListModified();
 			console.log(this.__items, this.editList.getSelectables().length);
 		},
 		
@@ -1091,11 +1185,74 @@ qx.Class.define('ccta_map.options',
 				var model = listItems[i].getModel(), aid = model.aid, type = model.type, name = model.name;
 				selectedAlliances.push([aid, type, name]);
 			}
-			this.close();
 			ccta_map.getInstance().__selectedAlliances = selectedAlliances;
 			ccta_map.container.getInstance().resetMap();
 			ccta_map.getInstance().getData();
 			console.log(ccta_map.getInstance().__selectedAlliances, this.__items)
+			this.close();
+		},
+		
+		__saveSettings: function()
+		{
+			if(typeof(Storage) === 'undefined') return;
+			
+			var selectedAlliances = [], listItems = this.editList.getSelectables();
+			for(var i = 0; i < listItems.length; i++)
+			{
+				var model = listItems[i].getModel(), aid = model.aid, type = model.type, name = model.name;
+				selectedAlliances.push([aid, type, name]);
+			}
+			
+			(!localStorage.ccta_map_settings) ? localStorage['ccta_map_settings'] = JSON.stringify(selectedAlliances) : localStorage.ccta_map_settings = JSON.stringify(selectedAlliances);
+			this.saveButton.setEnabled(false);
+			console.log(localStorage.ccta_map_settings);
+		},
+		
+		__checkSavedSettings: function()
+		{
+			if(typeof(Storage) === 'undefined') return;
+			var original = (localStorage.ccta_map_settings) ? JSON.parse(localStorage.ccta_map_settings) : null;
+			var items = this.__items;
+			var changed = false;
+			
+			if ((items != null) && (original != null) && (items.length != original.length)) changed = true;
+			if ((items != null) && (original != null) && (items.length == original.length))
+			{
+				original.map(function(x)
+				{
+					if (items.indexOf(x[0]) < 0) changes = true;
+				});
+			}
+			((original === null) || changed) ? this.saveButton.setEnabled(true) : this.saveButton.setEnabled(false);
+		},
+		
+		__checkDefaults: function()
+		{
+			var defaults = ccta_map.getInstance().__defaultAlliances, items = this.__items, changed = false;
+			if(!defaults) return;
+			
+			if ((items != null) && (defaults != null) && (items.length != defaults.length)) changed = true;
+			if ((items != null) && (defaults != null) && (items.length == defaults.length))
+			{
+				defaults.map(function(x)
+				{
+					if (items.indexOf(x[0]) < 0) changes = true;
+				});
+			}
+			(changed) ? this.defaultsButton.setEnabled(true) : this.defaultsButton.setEnabled(false);
+			console.log(defaults);
+		},
+		
+		__currentListModified: function()
+		{
+			var map = ccta_map.getInstance(), current = (map.__selectedAlliances == null) ? map.__defaultAlliances : map.__selectedAlliances;
+			var items = this.__items, changed = false;
+			current.map(function(x)
+			{
+				if(items.indexOf(x[0]) < 0) changes = true;
+			});
+			
+			((items.length != current.length) || (changed == true)) ? this.applyButton.setEnabled(true) : this.applyButton.setEnabled(false);
 		}
 		
 	}
