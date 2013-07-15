@@ -6,8 +6,8 @@
 // @version     1.0.0
 // @grant none
 // @author zdoom
-// @updateURL https://userscripts.org/scripts/source/171353.meta.js
-// @downloadURL https://userscripts.org/scripts/source/171353.user.js
+// @updateURL https://userscripts.org/scripts/source/173330.meta.js
+// @downloadURL https://userscripts.org/scripts/source/173330.user.js
 // ==/UserScript==
 
 (function(){
