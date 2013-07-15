@@ -43,8 +43,28 @@
 						
 						if(!!alliance && !!world && !!command && !!delegate && !!endGame)
 						{
-							timer.stop();
-							root.__init();
+							var worldWidth = world.get_WorldWidth();
+							if(!worldWidth) return;
+							
+							var factor = 500 / worldWidth;
+							var hubs = [], fortress = [];
+							
+							for (var index in endGame)
+							{
+								var currentHub = endGame[index];
+								if (currentHub.get_Type() == 1) hubs.push([(currentHub.get_X() + 2) * factor, (currentHub.get_Y() + 2) * factor]);
+								if (currentHub.get_Type() == 3) fortress = [(currentHub.get_X() + 2) * factor, (currentHub.get_Y() + 2) * factor];
+							}
+							
+							if (hubs.length > 0)
+							{
+								timer.stop();
+								root.__factor = factor;
+								root.__endGame['hubs'] = hubs;
+								root.__endGame['fortress'] = fortress;
+								root.__init();
+							}
+							console.log(hubs);
 						}
 						console.log(!!alliance, !!world, !!command, !!delegate, !!endGame);
 					};
@@ -84,22 +104,7 @@
 						var data = ClientLib.Data.MainData.GetInstance();
 						var alliance_data = data.get_Alliance();
 						var alliance_exists = alliance_data.get_Exists();
-						var world = data.get_World(), worldWidth = world.get_WorldWidth();
-						var factor = 500 / worldWidth;
-						
-						this.__factor = factor;
-						
-						var endGame = data.get_EndGame(), hubInfo = endGame.get_Hubs(), hubs = [], fortress = [];
-						for (var index in hubInfo.d)
-						{
-							var currentHub = hubInfo.d[index];
-							if (currentHub.get_Type() == 1) hubs.push([(currentHub.get_X() + 2) * factor, (currentHub.get_Y() + 2) * factor]);
-							if (currentHub.get_Type() == 3) fortress = [(currentHub.get_X() + 2) * factor, (currentHub.get_Y() + 2) * factor];
-						}
-						this.__endGame['hubs'] = hubs;
-						
-						this.__endGame['fortress'] = fortress;
-						
+												
 						if(alliance_exists)
 						{
 							var alliance_name = alliance_data.get_Name();
