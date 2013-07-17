@@ -1,9 +1,7 @@
-ccta-map
-========
-
 Command &amp; Conquer TA map
+============================
 
-<p>Creates a small map which illustrates the locations of the selected alliances bases and pois in relation to the center and other alliances.</p>
+<p>This script creates a small map which illustrates the locations of the selected alliances bases and pois in relation to the center and other alliances.</p>
 
 <h3>Features:</h3>
 <p>
@@ -19,5 +17,4 @@ Command &amp; Conquer TA map
 </ul>
 </p>
 
-<h5>For chrome users:</h5>
-<a href="https://chrome.google.com/webstore/detail/command-conquer-ta-world/elcdjkjjjfkfplhpbehfldnhjjjclilj">link</a>
+
